@@ -9,33 +9,39 @@ import org.gradle.api.file.FileVisitDetails
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
-import org.gradle.api.tasks.incremental.IncrementalTaskInputs
 import org.gradle.api.tasks.util.PatternSet
+import org.gradle.work.Incremental
+import org.gradle.work.InputChanges
 
 /**
  * Created by aurel on 14/12/13.
  */
 class Magick extends DefaultTask {
 
-    
+    @Incremental
     @InputFiles
     FileTree inputFiles
+
     @OutputDirectory
     File outputDir
+
     @Input
     String inputSpec
+
     @Input
     String command
+
     @Input
     Closure output
 
     @Internal
     DefaultMagickSpec spec
+
     @Internal
     FormattingSpec formattingSpec
+
 //    @Input
 //    @Optional
     Closure outputFileFromInputFileClosure
@@ -105,12 +111,11 @@ class Magick extends DefaultTask {
     }
     
     @TaskAction
-    void execute(IncrementalTaskInputs incrementalInputs) {
+    void execute(InputChanges inputChanges) {
         LinkedList<String> execArgs
         FileCollection changedFiles = project.files()
 
-        incrementalInputs.outOfDate {
-            change ->
+        inputChanges.getFileChanges(inputFiles).each { change ->
                 changedFiles.from(change.file)
         }
 
@@ -142,12 +147,13 @@ class Magick extends DefaultTask {
                 }
         }
 
-        if (incrementalInputs.isIncremental() && outputFileFormInputFileClosure != null) {
-            incrementalInputs.removed {
-                remove ->
-                    println "Applying outPutFileFromInputClosure to ${remove.file}"
-                    File outputFileToRemove = outputFileFromInputFileClosure(remove.file)
+        if (inputChanges.incremental && outputFileFormInputFileClosure != null) {
+            inputChanges.getFileChanges(inputDir).each { change ->
+                if (change.changeType == ChangeType.REMOVED) {
+                    println "Applying outPutFileFromInputClosure to ${change.normalizedPath.get().asFile}"
+                    File outputFileToRemove = outputFileFromInputFileClosure(change.normalizedPath)
                     outputFileToRemove.delete()
+                }
             }
         }
     }
